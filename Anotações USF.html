@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Minhas Anotações</title>
+  <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet" />
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #121212;
+      color: #e0e0e0;
+      margin: 0;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      color: #ffffff;
+    }
+    .form, .filtro {
+      background-color: #1f1f1f;
+      max-width: 600px;
+      margin: 20px auto;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 0 10px rgba(255,255,255,0.05);
+    }
+    input, button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 10px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      color: #fff;
+      background-color: #2c2c2c;
+    }
+    button {
+      background-color: #00bcd4;
+      color: #000;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #008fa3;
+    }
+    .notas {
+      max-width: 600px;
+      margin: 20px auto;
+    }
+    .nota {
+      background-color: #1e1e1e;
+      padding: 15px;
+      margin-bottom: 15px;
+      border-left: 5px solid #00bcd4;
+      border-radius: 10px;
+      position: relative;
+      overflow: hidden; /* Garante que o conteúdo não vaze para fora */
+    }
+    .nota h3 {
+      margin: 0 0 5px;
+    }
+    .nota small {
+      font-size: 12px;
+      color: #aaa;
+    }
+    .botoes {
+      margin-top: 10px;
+      display: flex;
+      gap: 10px;
+    }
+    .botoes button {
+      width: auto;
+      flex: 1;
+    }
+    .editor-container {
+      background-color: #1c1c1c;
+      color: #fff;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #333;
+      resize: vertical;
+      width: 100%;
+      height: 300px;
+      margin-top: 10px;
+    }
+    .exportar {
+      max-width: 600px;
+      margin: 20px auto;
+      text-align: center;
+    }
+    .form button {
+      margin-top: 20px;
+    }
+    /* Novo estilo para imagens dentro das notas */
+    .nota img {
+      max-width: 100%; /* Garante que a imagem não exceda a largura da .nota */
+      height: auto; /* Mantém a proporção da imagem */
+      display: block; /* Remove espaçamento extra abaixo da imagem */
+      margin: 10px 0; /* Adiciona margem para espaçamento interno */
+    }
+  </style>
+</head>
+<body>
+  <h1>Minhas Anotações da Faculdade</h1>
+
+  <div class="form">
+    <input type="text" id="materia" placeholder="Matéria" spellcheck="true" />
+    <input type="text" id="titulo" placeholder="Título" spellcheck="true" />
+    <div id="editor-container" class="editor-container"></div>
+    <button onclick="adicionarNota()">Adicionar Nota</button>
+    <button id="salvarEditar" style="display:none" onclick="salvarNotaEditada()">Salvar Alterações</button>
+  </div>
+
+  <div class="filtro">
+    <input type="text" id="filtro" oninput="mostrarNotas()" placeholder="Filtrar por matéria, título ou conteúdo..." />
+    <div>
+      <label for="dataInicio">Data Início:</label>
+      <input type="date" id="dataInicio" onchange="mostrarNotas()" />
+    </div>
+    <div>
+      <label for="dataFim">Data Fim:</label>
+      <input type="date" id="dataFim" onchange="mostrarNotas()" />
+    </div>
+    <button onclick="limparFiltrosData()">Limpar Filtro de Data</button>
+  </div>
+
+  <div class="notas" id="listaNotas"></div>
+
+  <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script>
+    let notas = JSON.parse(localStorage.getItem("notas")) || [];
+    let notaEditandoId = null;
+
+    const quill = new Quill('#editor-container', {
+      theme: 'snow',
+      modules: {
+        toolbar: [
+          [{ 'header': '1' }, { 'header': '2' }, { 'font': [] }],
+          [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+          ['bold', 'italic', 'underline'],
+          ['link'],
+          ['image']
+        ]
+      }
+    });
+
+    function salvarNotas() {
+      localStorage.setItem("notas", JSON.stringify(notas));
+    }
+
+    function formatarData(ms) {
+      return new Date(ms).toLocaleString("pt-BR");
+    }
+
+    function adicionarNota() {
+      const materia = document.getElementById("materia").value.trim();
+      const titulo = document.getElementById("titulo").value.trim();
+      const conteudo = quill.root.innerHTML.trim();
+
+      if (!materia || !titulo || !conteudo) {
+        alert("Preencha todos os campos obrigatórios.");
+        return;
+      }
+
+      const agora = Date.now();
+      const novaNota = {
+        id: agora,
+        materia,
+        titulo,
+        conteudo,
+        criadoEm: agora,
+        editadoEm: agora
+      };
+
+      notas.push(novaNota);
+      salvarNotas();
+      mostrarNotas();
+
+      document.getElementById("materia").value = "";
+      document.getElementById("titulo").value = "";
+      quill.root.innerHTML = "";
+    }
+
+    function editarNota(id) {
+      const nota = notas.find(n => n.id === id);
+      if (!nota) return;
+
+      document.getElementById("materia").value = nota.materia;
+      document.getElementById("titulo").value = nota.titulo;
+      quill.root.innerHTML = nota.conteudo;
+
+      notaEditandoId = id;
+
+      document.querySelector('button').style.display = 'none';
+      document.getElementById("salvarEditar").style.display = 'inline';
+    }
+
+    function salvarNotaEditada() {
+      const materia = document.getElementById("materia").value.trim();
+      const titulo = document.getElementById("titulo").value.trim();
+      const conteudo = quill.root.innerHTML.trim();
+
+      if (!materia || !titulo || !conteudo) {
+        alert("Preencha todos os campos obrigatórios.");
+        return;
+      }
+
+      const nota = notas.find(n => n.id === notaEditandoId);
+      if (nota) {
+        nota.materia = materia;
+        nota.titulo = titulo;
+        nota.conteudo = conteudo;
+        nota.editadoEm = Date.now();
+
+        notaEditandoId = null;
+        document.querySelector('button').style.display = 'inline';
+        document.getElementById("salvarEditar").style.display = 'none';
+
+        salvarNotas();
+        mostrarNotas();
+      }
+    }
+
+    function excluirNota(id) {
+      notas = notas.filter(n => n.id !== id);
+      salvarNotas();
+      mostrarNotas();
+    }
+
+    function downloadPDF(id) {
+      const nota = notas.find(n => n.id === id);
+      if (!nota) return;
+
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      const margin = 10;
+      let y = margin;
+      const lineHeight = 7;
+      const maxWidth = 190 - 2 * margin;
+
+      // Adicionar título
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.text(nota.titulo, margin, y);
+      y += lineHeight + 5;
+
+      // Adicionar metadados
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.text(`Criado em: ${formatarData(nota.criadoEm)} | Última edição: ${formatarData(nota.editadoEm)}`, margin, y);
+      y += lineHeight + 10;
+
+      // Processar conteúdo com formatação
+      const contentElement = document.createElement('div');
+      contentElement.innerHTML = nota.conteudo;
+
+      // Remover imagens
+      const imgElements = contentElement.querySelectorAll('img');
+      imgElements.forEach(img => img.remove());
+
+      function processNode(node, isListItem = false, listType = null, listIndex = 0, indent = 0) {
+        if (node.nodeType === Node.TEXT_NODE) {
+          const text = node.textContent.trim().replace(/ /g, ' ');
+          if (text) {
+            const splitText = doc.splitTextToSize(text, maxWidth - indent);
+            splitText.forEach(line => {
+              if (isListItem) {
+                const prefix = listType === 'ordered' ? `${listIndex}. ` : '• ';
+                doc.text(prefix + line, margin + indent, y);
+              } else {
+                doc.text(line, margin + indent, y);
+              }
+              y += lineHeight;
+            });
+          }
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+          const tag = node.tagName.toLowerCase();
+          let prevFontStyle = doc.getFont().fontStyle;
+          let prevFontSize = doc.getFontSize();
+          let isList = tag === 'ul' || tag === 'ol';
+          let listItemIndex = listType === 'ordered' ? listIndex : 0;
+
+          // Aplicar formatação baseada na tag
+          if (tag === 'strong' || tag === 'b') {
+            doc.setFont("helvetica", "bold");
+          } else if (tag === 'em' || tag === 'i') {
+            doc.setFont("helvetica", "italic");
+          } else if (tag === 'h1') {
+            doc.setFontSize(16);
+          } else if (tag === 'h2') {
+            doc.setFontSize(14);
+          } else if (tag === 'p' || tag === 'div') {
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(12);
+          }
+
+          if (isList) {
+            const items = node.querySelectorAll('li');
+            items.forEach((li, index) => {
+              processNode(li, true, tag === 'ol' ? 'ordered' : 'bullet', index + 1, indent + 5);
+            });
+          } else if (tag === 'li') {
+            Array.from(node.childNodes).forEach(child => {
+              processNode(child, isListItem, listType, listItemIndex, indent);
+            });
+          } else {
+            Array.from(node.childNodes).forEach(child => {
+              processNode(child, isListItem, listType, listItemIndex, indent);
+            });
+          }
+
+          // Restaurar formatação
+          doc.setFont("helvetica", prevFontStyle);
+          doc.setFontSize(prevFontSize);
+        }
+      }
+
+      // Processar todos os nós do conteúdo
+      Array.from(contentElement.childNodes).forEach(node => {
+        processNode(node);
+      });
+
+      doc.save(`${nota.titulo}.pdf`);
+    }
+
+    function mostrarNotas() {
+      const filtro = document.getElementById("filtro").value.toLowerCase();
+      const dataInicio = document.getElementById("dataInicio").value;
+      const dataFim = document.getElementById("dataFim").value;
+
+      const listaNotas = notas.filter(nota => {
+        const matchesFiltro =
+          nota.materia.toLowerCase().includes(filtro) ||
+          nota.titulo.toLowerCase().includes(filtro) ||
+          nota.conteudo.toLowerCase().includes(filtro);
+        const matchesData =
+          (!dataInicio || new Date(nota.criadoEm) >= new Date(dataInicio)) &&
+          (!dataFim || new Date(nota.criadoEm) <= new Date(dataFim));
+        return matchesFiltro && matchesData;
+      });
+
+      const notasElement = document.getElementById("listaNotas");
+      notasElement.innerHTML = '';
+
+      listaNotas.forEach(nota => {
+        const notaElement = document.createElement("div");
+        notaElement.classList.add("nota");
+
+        const conteudoExibicao = nota.conteudo
+          .replace(/ /g, ' ')
+          .replace(/<br\s*[\/]?>/gi, '<br>');
+
+        notaElement.innerHTML = `
+          <h3>${nota.titulo}</h3>
+          <small>Criado em: ${formatarData(nota.criadoEm)} | Última edição: ${formatarData(nota.editadoEm)}</small>
+          <div>${conteudoExibicao}</div>
+          <div class="botoes">
+            <button onclick="editarNota(${nota.id})">Editar</button>
+            <button onclick="excluirNota(${nota.id})">Excluir</button>
+            <button onclick="downloadPDF(${nota.id})">Baixar PDF</button>
+          </div>
+        `;
+        notasElement.appendChild(notaElement);
+      });
+    }
+
+    function limparFiltrosData() {
+      document.getElementById("dataInicio").value = "";
+      document.getElementById("dataFim").value = "";
+      mostrarNotas();
+    }
+
+    mostrarNotas();
+  </script>
+</body>
+</html>
